@@ -161,7 +161,7 @@ from(bucket: "perf")
   |> filter(fn: (r) => r["branch"] == "%s")
   |> filter(fn: (r) => r["goos"] == "linux")
   |> filter(fn: (r) => r["goarch"] == "amd64")
-  |> fill(column: "repository", value: "go")
+  |> fill(column: "repository", value: "cockroach")
   |> filter(fn: (r) => r["repository"] == "%s")
   |> pivot(columnKey: ["_field"], rowKey: ["_time"], valueColumn: "_value")
   |> yield(name: "last")
@@ -187,7 +187,7 @@ from(bucket: "perf")
 
 // fetchDefaultBenchmarks queries Influx for the default benchmark set.
 func fetchDefaultBenchmarks(ctx context.Context, qc api.QueryAPI, start, end time.Time, repository, branch string) ([]*BenchmarkJSON, error) {
-	if repository != "go" {
+	if repository != "cockroach" {
 		// No defaults defined for other subrepos yet, just return an
 		// empty set.
 		return nil, nil
@@ -255,18 +255,18 @@ func fetchNamedBenchmark(ctx context.Context, qc api.QueryAPI, start, end time.T
 	// sets repository=go on all points missing that field, as they were
 	// all runs of the go repo.
 	query := fmt.Sprintf(`
-from(bucket: "perf")
+from(bucket: "%s")
   |> range(start: %s, stop: %s)
   |> filter(fn: (r) => r["_measurement"] == "benchmark-result")
   |> filter(fn: (r) => r["name"] == "%s")
   |> filter(fn: (r) => r["branch"] == "%s")
   |> filter(fn: (r) => r["goos"] == "linux")
   |> filter(fn: (r) => r["goarch"] == "amd64")
-  |> fill(column: "repository", value: "go")
+  |> fill(column: "repository", value: "cockroach")
   |> filter(fn: (r) => r["repository"] == "%s")
   |> pivot(columnKey: ["_field"], rowKey: ["_time"], valueColumn: "_value")
   |> yield(name: "last")
-`, start.Format(time.RFC3339), end.Format(time.RFC3339), name, branch, repository)
+`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), name, branch, repository)
 
 	res, err := influxQuery(ctx, qc, query)
 	if err != nil {
@@ -296,17 +296,17 @@ func fetchAllBenchmarks(ctx context.Context, qc api.QueryAPI, regressions bool, 
 	// sets repository=go on all points missing that field, as they were
 	// all runs of the go repo.
 	query := fmt.Sprintf(`
-from(bucket: "perf")
+from(bucket: "%s")
   |> range(start: %s, stop: %s)
   |> filter(fn: (r) => r["_measurement"] == "benchmark-result")
   |> filter(fn: (r) => r["branch"] == "%s")
   |> filter(fn: (r) => r["goos"] == "linux")
   |> filter(fn: (r) => r["goarch"] == "amd64")
-  |> fill(column: "repository", value: "go")
+  |> fill(column: "repository", value: "cockroach")
   |> filter(fn: (r) => r["repository"] == "%s")
   |> pivot(columnKey: ["_field"], rowKey: ["_time"], valueColumn: "_value")
   |> yield(name: "last")
-`, start.Format(time.RFC3339), end.Format(time.RFC3339), branch, repository)
+`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), branch, repository)
 
 	res, err := influxQuery(ctx, qc, query)
 	if err != nil {
@@ -615,7 +615,7 @@ func (a *App) dashboardData(w http.ResponseWriter, r *http.Request) {
 
 	repository := r.FormValue("repository")
 	if repository == "" {
-		repository = "go"
+		repository = "cockroach"
 	}
 	branch := r.FormValue("branch")
 	if branch == "" {

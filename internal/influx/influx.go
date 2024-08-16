@@ -8,10 +8,10 @@ package influx
 
 const (
 	// Org is the Influx organization name.
-	Org = "golang"
+	Org = "cockroach"
 
-	// Bucker is the Influx bucket name.
-	Bucket = "perf"
+	// Bucket is the Influx bucket name.
+	Bucket = "microbench"
 )
 
 // The names of the password/token secrets in Google Secret Manager.
