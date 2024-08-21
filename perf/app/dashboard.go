@@ -118,7 +118,7 @@ func fluxRecordToValue(rec *query.FluxRecord) (ValueJSON, error) {
 
 // validateRe is an allowlist of characters for a Flux string literal. The
 // string will be quoted, so we must not allow ending the quote sequence.
-var validateRe = regexp.MustCompile(`^[a-zA-Z0-9(),=/_:;.-]+$`)
+var validateRe = regexp.MustCompile(`^[a-zA-Z0-9(),=/_:;.*-]+$`)
 
 func validateFluxString(s string) error {
 	if !validateRe.MatchString(s) {
@@ -133,6 +133,10 @@ func influxQuery(ctx context.Context, qc api.QueryAPI, query string) (*api.Query
 }
 
 var errBenchmarkNotFound = errors.New("benchmark not found")
+
+func sanitizeBenchmarkNameRegex(name string) string {
+	return strings.Replace(name, "/", "\\/", -1)
+}
 
 // fetchNamedUnitBenchmark queries Influx for a specific name + unit benchmark.
 func fetchNamedUnitBenchmark(ctx context.Context, qc api.QueryAPI, start, end time.Time, repository, branch, name, unit string) (*BenchmarkJSON, error) {
@@ -156,7 +160,7 @@ func fetchNamedUnitBenchmark(ctx context.Context, qc api.QueryAPI, start, end ti
 from(bucket: "%s")
   |> range(start: %s, stop: %s)
   |> filter(fn: (r) => r["_measurement"] == "benchmark-result")
-  |> filter(fn: (r) => r["name"] == "%s")
+  |> filter(fn: (r) => r["name"] =~ /%s/)
   |> filter(fn: (r) => r["unit"] == "%s")
   |> filter(fn: (r) => r["branch"] == "%s")
   |> filter(fn: (r) => r["goos"] == "linux")
@@ -165,7 +169,7 @@ from(bucket: "%s")
   |> filter(fn: (r) => r["repository"] == "%s")
   |> pivot(columnKey: ["_field"], rowKey: ["_time"], valueColumn: "_value")
   |> yield(name: "last")
-`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), name, unit, branch, repository)
+`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), sanitizeBenchmarkNameRegex(name), unit, branch, repository)
 
 	res, err := influxQuery(ctx, qc, query)
 	if err != nil {
@@ -258,7 +262,7 @@ func fetchNamedBenchmark(ctx context.Context, qc api.QueryAPI, start, end time.T
 from(bucket: "%s")
   |> range(start: %s, stop: %s)
   |> filter(fn: (r) => r["_measurement"] == "benchmark-result")
-  |> filter(fn: (r) => r["name"] == "%s")
+  |> filter(fn: (r) => r["name"] =~ /%s/)
   |> filter(fn: (r) => r["branch"] == "%s")
   |> filter(fn: (r) => r["goos"] == "linux")
   |> filter(fn: (r) => r["goarch"] == "amd64")
@@ -266,7 +270,7 @@ from(bucket: "%s")
   |> filter(fn: (r) => r["repository"] == "%s")
   |> pivot(columnKey: ["_field"], rowKey: ["_time"], valueColumn: "_value")
   |> yield(name: "last")
-`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), name, branch, repository)
+`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), sanitizeBenchmarkNameRegex(name), branch, repository)
 
 	res, err := influxQuery(ctx, qc, query)
 	if err != nil {
