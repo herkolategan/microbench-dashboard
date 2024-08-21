@@ -45,6 +45,7 @@ func main() {
 		AuthCronEmail: *authCronEmail,
 	}
 	mux := http.NewServeMux()
+	mux.Handle("/", http.RedirectHandler("dashboard/", 307))
 	app.RegisterOnMux(mux)
 
 	log.Printf("Serving...")
