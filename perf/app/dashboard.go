@@ -53,6 +53,7 @@ type DataJSON struct {
 // the best fit for a graph.
 type BenchmarkJSON struct {
 	Name           string
+	Package        string
 	Unit           string
 	HigherIsBetter bool
 
@@ -134,7 +135,7 @@ func influxQuery(ctx context.Context, qc api.QueryAPI, query string) (*api.Query
 
 var errBenchmarkNotFound = errors.New("benchmark not found")
 
-func sanitizeBenchmarkNameRegex(name string) string {
+func sanitizeInfluxRegex(name string) string {
 	return strings.Replace(name, "/", "\\/", -1)
 }
 
@@ -169,7 +170,7 @@ from(bucket: "%s")
   |> filter(fn: (r) => r["repository"] == "%s")
   |> pivot(columnKey: ["_field"], rowKey: ["_time"], valueColumn: "_value")
   |> yield(name: "last")
-`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), sanitizeBenchmarkNameRegex(name), unit, branch, repository)
+`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), sanitizeInfluxRegex(name), unit, branch, repository)
 
 	res, err := influxQuery(ctx, qc, query)
 	if err != nil {
@@ -244,7 +245,7 @@ func fetchDefaultBenchmarks(ctx context.Context, qc api.QueryAPI, start, end tim
 
 // fetchNamedBenchmark queries Influx for all benchmark results with the passed
 // name (for all units).
-func fetchNamedBenchmark(ctx context.Context, qc api.QueryAPI, start, end time.Time, repository, branch, name string) ([]*BenchmarkJSON, error) {
+func fetchNamedBenchmark(ctx context.Context, qc api.QueryAPI, start, end time.Time, repository, branch, name, pkg string) ([]*BenchmarkJSON, error) {
 	if err := validateFluxString(repository); err != nil {
 		return nil, fmt.Errorf("invalid repository name: %w", err)
 	}
@@ -263,6 +264,7 @@ from(bucket: "%s")
   |> range(start: %s, stop: %s)
   |> filter(fn: (r) => r["_measurement"] == "benchmark-result")
   |> filter(fn: (r) => r["name"] =~ /%s/)
+  |> filter(fn: (r) => r["pkg"] =~ /%s/)
   |> filter(fn: (r) => r["branch"] == "%s")
   |> filter(fn: (r) => r["goos"] == "linux")
   |> filter(fn: (r) => r["goarch"] == "amd64")
@@ -270,7 +272,7 @@ from(bucket: "%s")
   |> filter(fn: (r) => r["repository"] == "%s")
   |> pivot(columnKey: ["_field"], rowKey: ["_time"], valueColumn: "_value")
   |> yield(name: "last")
-`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), sanitizeBenchmarkNameRegex(name), branch, repository)
+`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), sanitizeInfluxRegex(name), sanitizeInfluxRegex(pkg), branch, repository)
 
 	res, err := influxQuery(ctx, qc, query)
 	if err != nil {
@@ -349,6 +351,11 @@ func queryToJson(res *api.QueryTableResult) ([]*BenchmarkJSON, error) {
 			return nil, fmt.Errorf("record %s name value got type %T want string", rec, rec.ValueByKey("name"))
 		}
 
+		pkg, ok := rec.ValueByKey("pkg").(string)
+		if !ok {
+			return nil, fmt.Errorf("record %s name value got type %T want string", rec, rec.ValueByKey("pkg"))
+		}
+
 		unit, ok := rec.ValueByKey("unit").(string)
 		if !ok {
 			return nil, fmt.Errorf("record %s unit value got type %T want string", rec, rec.ValueByKey("unit"))
@@ -359,6 +366,7 @@ func queryToJson(res *api.QueryTableResult) ([]*BenchmarkJSON, error) {
 		if !ok {
 			b = &BenchmarkJSON{
 				Name:           name,
+				Package:        pkg,
 				Unit:           unit,
 				HigherIsBetter: isHigherBetter(unit),
 			}
@@ -627,16 +635,17 @@ func (a *App) dashboardData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	benchmark := r.FormValue("benchmark")
+	pkg := r.FormValue("package")
 	unit := r.FormValue("unit")
 	var benchmarks []*BenchmarkJSON
-	if benchmark == "" {
+	if benchmark == "" && pkg == "" {
 		benchmarks, err = fetchDefaultBenchmarks(ctx, qc, start, end, repository, branch)
 	} else if benchmark == "all" {
 		benchmarks, err = fetchAllBenchmarks(ctx, qc, false, start, end, repository, branch)
 	} else if benchmark == "regressions" {
 		benchmarks, err = fetchAllBenchmarks(ctx, qc, true, start, end, repository, branch)
-	} else if benchmark != "" && unit == "" {
-		benchmarks, err = fetchNamedBenchmark(ctx, qc, start, end, repository, branch, benchmark)
+	} else if unit == "" {
+		benchmarks, err = fetchNamedBenchmark(ctx, qc, start, end, repository, branch, benchmark, pkg)
 	} else {
 		var result *BenchmarkJSON
 		result, err = fetchNamedUnitBenchmark(ctx, qc, start, end, repository, branch, benchmark, unit)

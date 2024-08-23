@@ -109,6 +109,10 @@ nav .left-separator {
   padding-left: 0.5rem;
 }
 
+.Dashboard-search-package {
+  display: inline-block;
+  width: 200px;
+}
 .Dashboard-search-benchmark {
   display: inline-block;
   width: 300px;

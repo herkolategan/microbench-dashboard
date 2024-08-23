@@ -27,6 +27,9 @@ license that can be found in the LICENSE file.
 	<form autocomplete="off" action="./">
 		<ul>
 			<li>
+				<div class="Dashboard-search-package">
+					<input id="package-input" type="text" name="package" placeholder="Package (optional)" />
+				</div>
 				<div class="Dashboard-search-benchmark">
 					<input id="benchmark-input" type="text" name="benchmark" placeholder="Type benchmark name..." />
 				</div>
@@ -130,8 +133,8 @@ function addCharts(benchmarks, repository, commits) {
 			dashboard.appendChild(section);
 
 			let link = document.createElement("a");
-			link.href = "?benchmark=" + bench.Name;
-			link.textContent = bench.Name;
+			link.href = "?benchmark=" + bench.Name + "&package=" + bench.Package;
+			link.textContent = bench.Package + "→" + bench.Name;
 
 			let title = document.createElement("h2");
 			title.classList.add("Dashboard-title");
@@ -162,7 +165,7 @@ function addCharts(benchmarks, repository, commits) {
 					diffText = "improvement";
 					isRegression = false;
 				}
-				p.innerHTML = `${regression}% ${diffText}, ${(r.Delta*100).toFixed(2)}%-point change at <a href="?benchmark=${bench.Name}&unit=${bench.Unit}#${commitToId(rd.CommitHash)}">${shortCommit}</a>.`;
+				p.innerHTML = `${regression}% ${diffText}, ${(r.Delta*100).toFixed(2)}%-point change at <a href="?benchmark=${bench.Name}&unit=${bench.Unit}&package=${bench.Package}#${commitToId(rd.CommitHash)}">${shortCommit}</a>.`;
 
 				// Add a link to file a bug.
 				if (isRegression) {
@@ -218,8 +221,8 @@ function addTable(bench, unit, repository, commits) {
 	dashboard.appendChild(section);
 
 	let link = document.createElement("a");
-	link.href = "?benchmark=" + bench.Name + "&unit=" + unit;
-	link.textContent = bench.Name + " (" + unit + ")";
+	link.href = "?benchmark=" + bench.Name + "&unit=" + unit + "&package=" + bench.Package
+	link.textContent = bench.Package + "→" + bench.Name + " (" + unit + ")";
 
 	let title = document.createElement("h2");
 	title.classList.add("Dashboard-title");
