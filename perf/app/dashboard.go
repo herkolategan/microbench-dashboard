@@ -119,7 +119,7 @@ func fluxRecordToValue(rec *query.FluxRecord) (ValueJSON, error) {
 
 // validateRe is an allowlist of characters for a Flux string literal. The
 // string will be quoted, so we must not allow ending the quote sequence.
-var validateRe = regexp.MustCompile(`^[a-zA-Z0-9(),=/_:;.*-]+$`)
+var validateRe = regexp.MustCompile(`^[a-zA-Z0-9(),=/_:;.*-]*$`)
 
 func validateFluxString(s string) error {
 	if !validateRe.MatchString(s) {
@@ -161,7 +161,7 @@ func fetchNamedUnitBenchmark(ctx context.Context, qc api.QueryAPI, start, end ti
 from(bucket: "%s")
   |> range(start: %s, stop: %s)
   |> filter(fn: (r) => r["_measurement"] == "benchmark-result")
-  |> filter(fn: (r) => r["name"] =~ /%s/)
+  |> filter(fn: (r) => r["name"] == "%s")
   |> filter(fn: (r) => r["unit"] == "%s")
   |> filter(fn: (r) => r["branch"] == "%s")
   |> filter(fn: (r) => r["goos"] == "linux")
@@ -170,7 +170,7 @@ from(bucket: "%s")
   |> filter(fn: (r) => r["repository"] == "%s")
   |> pivot(columnKey: ["_field"], rowKey: ["_time"], valueColumn: "_value")
   |> yield(name: "last")
-`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), sanitizeInfluxRegex(name), unit, branch, repository)
+`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), name, unit, branch, repository)
 
 	res, err := influxQuery(ctx, qc, query)
 	if err != nil {
@@ -191,61 +191,18 @@ from(bucket: "%s")
 }
 
 // fetchDefaultBenchmarks queries Influx for the default benchmark set.
-func fetchDefaultBenchmarks(ctx context.Context, qc api.QueryAPI, start, end time.Time, repository, branch string) ([]*BenchmarkJSON, error) {
+func fetchDefaultBenchmarks(ctx context.Context, qc api.QueryAPI, regressions bool, start, end time.Time, repository, branch string) ([]*BenchmarkJSON, error) {
 	if repository != "cockroach" {
 		// No defaults defined for other subrepos yet, just return an
 		// empty set.
 		return nil, nil
 	}
-
-	// Keep benchmarks with the same name grouped together, which is
-	// assumed by the JS.
-	benchmarks := []struct{ name, unit string }{
-		{"Tile38QueryLoad-16", "sec/op"},
-		{"Tile38QueryLoad-16", "p50-latency-sec"},
-		{"Tile38QueryLoad-16", "p90-latency-sec"},
-		{"Tile38QueryLoad-16", "p99-latency-sec"},
-		{"Tile38QueryLoad-16", "average-RSS-bytes"},
-		{"Tile38QueryLoad-16", "peak-RSS-bytes"},
-		{"Tile38QueryLoad-88", "sec/op"},
-		{"Tile38QueryLoad-88", "p50-latency-sec"},
-		{"Tile38QueryLoad-88", "p90-latency-sec"},
-		{"Tile38QueryLoad-88", "p99-latency-sec"},
-		{"Tile38QueryLoad-88", "average-RSS-bytes"},
-		{"Tile38QueryLoad-88", "peak-RSS-bytes"},
-		{"EtcdPut-16", "sec/op"},
-		{"EtcdPut-16", "p50-latency-sec"},
-		{"EtcdPut-16", "p90-latency-sec"},
-		{"EtcdPut-16", "p99-latency-sec"},
-		{"EtcdPut-16", "average-RSS-bytes"},
-		{"EtcdPut-16", "peak-RSS-bytes"},
-		{"GoBuildKubelet-16", "sec/op"},
-		{"GoBuildKubeletLink-16", "sec/op"},
-		{"GoBuildKubelet-88", "sec/op"},
-		{"GoBuildKubeletLink-88", "sec/op"},
-		{"RegexMatch-16", "sec/op"},
-		{"BuildJSON-16", "sec/op"},
-		{"ZapJSON-16", "sec/op"},
-	}
-
-	ret := make([]*BenchmarkJSON, 0, len(benchmarks))
-	for _, bench := range benchmarks {
-		b, err := fetchNamedUnitBenchmark(ctx, qc, start, end, repository, branch, bench.name, bench.unit)
-		if errors.Is(err, errBenchmarkNotFound) {
-			continue
-		}
-		if err != nil {
-			return nil, fmt.Errorf("error fetching benchmark %s/%s: %w", bench.name, bench.unit, err)
-		}
-		ret = append(ret, b)
-	}
-
-	return ret, nil
+	return fetchNamedBenchmark(ctx, qc, regressions, start, end, repository, branch, ".*", "pkg/bench/tpcc")
 }
 
 // fetchNamedBenchmark queries Influx for all benchmark results with the passed
 // name (for all units).
-func fetchNamedBenchmark(ctx context.Context, qc api.QueryAPI, start, end time.Time, repository, branch, name, pkg string) ([]*BenchmarkJSON, error) {
+func fetchNamedBenchmark(ctx context.Context, qc api.QueryAPI, regressions bool, start, end time.Time, repository, branch, name, pkg string) ([]*BenchmarkJSON, error) {
 	if err := validateFluxString(repository); err != nil {
 		return nil, fmt.Errorf("invalid repository name: %w", err)
 	}
@@ -256,6 +213,15 @@ func fetchNamedBenchmark(ctx context.Context, qc api.QueryAPI, start, end time.T
 		return nil, fmt.Errorf("invalid benchmark name: %w", err)
 	}
 
+	nameQuery := ""
+	if name != "" {
+		nameQuery = fmt.Sprintf("|> filter(fn: (r) => r[\"name\"] =~ /%s/)", sanitizeInfluxRegex(name))
+	}
+	pkgQuery := ""
+	if pkg != "" {
+		pkgQuery = fmt.Sprintf("|> filter(fn: (r) => r[\"pkg\"] =~ /%s/)", sanitizeInfluxRegex(pkg))
+	}
+
 	// Note that very old points are missing the "repository" field. fill()
 	// sets repository=go on all points missing that field, as they were
 	// all runs of the go repo.
@@ -263,8 +229,8 @@ func fetchNamedBenchmark(ctx context.Context, qc api.QueryAPI, start, end time.T
 from(bucket: "%s")
   |> range(start: %s, stop: %s)
   |> filter(fn: (r) => r["_measurement"] == "benchmark-result")
-  |> filter(fn: (r) => r["name"] =~ /%s/)
-  |> filter(fn: (r) => r["pkg"] =~ /%s/)
+  %s
+  %s
   |> filter(fn: (r) => r["branch"] == "%s")
   |> filter(fn: (r) => r["goos"] == "linux")
   |> filter(fn: (r) => r["goarch"] == "amd64")
@@ -272,14 +238,14 @@ from(bucket: "%s")
   |> filter(fn: (r) => r["repository"] == "%s")
   |> pivot(columnKey: ["_field"], rowKey: ["_time"], valueColumn: "_value")
   |> yield(name: "last")
-`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), sanitizeInfluxRegex(name), sanitizeInfluxRegex(pkg), branch, repository)
+`, influx.Bucket, start.Format(time.RFC3339), end.Format(time.RFC3339), nameQuery, pkgQuery, branch, repository)
 
 	res, err := influxQuery(ctx, qc, query)
 	if err != nil {
 		return nil, fmt.Errorf("error performing query: %w", err)
 	}
 
-	b, err := groupBenchmarkResults(res, false)
+	b, err := groupBenchmarkResults(res, regressions)
 	if err != nil {
 		return nil, err
 	}
@@ -635,24 +601,24 @@ func (a *App) dashboardData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	benchmark := r.FormValue("benchmark")
+	regressions := r.FormValue("regressions") == "on"
 	pkg := r.FormValue("package")
 	unit := r.FormValue("unit")
 	var benchmarks []*BenchmarkJSON
-	if benchmark == "" && pkg == "" {
-		benchmarks, err = fetchDefaultBenchmarks(ctx, qc, start, end, repository, branch)
-	} else if benchmark == "all" {
-		benchmarks, err = fetchAllBenchmarks(ctx, qc, false, start, end, repository, branch)
-	} else if benchmark == "regressions" {
-		benchmarks, err = fetchAllBenchmarks(ctx, qc, true, start, end, repository, branch)
-	} else if unit == "" {
-		benchmarks, err = fetchNamedBenchmark(ctx, qc, start, end, repository, branch, benchmark, pkg)
-	} else {
+
+	if unit != "" {
+		// Fetch a single and specific benchmark.
 		var result *BenchmarkJSON
 		result, err = fetchNamedUnitBenchmark(ctx, qc, start, end, repository, branch, benchmark, unit)
 		if result != nil && err == nil {
 			benchmarks = []*BenchmarkJSON{result}
 		}
+	} else if benchmark == "" || pkg != "" {
+		benchmarks, err = fetchNamedBenchmark(ctx, qc, regressions, start, end, repository, branch, benchmark, pkg)
+	} else {
+		benchmarks, err = fetchDefaultBenchmarks(ctx, qc, regressions, start, end, repository, branch)
 	}
+
 	if errors.Is(err, errBenchmarkNotFound) {
 		log.Printf("Benchmark not found: %q", benchmark)
 		http.Error(w, "Benchmark not found", 404)

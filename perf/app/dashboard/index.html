@@ -37,9 +37,11 @@ license that can be found in the LICENSE file.
 					<input id="unit-input" type="text" name="unit" placeholder="Unit (optional)" />
 				</div>
 				<input type="submit" />
+				<div class="Dashboard-search-regressions">
+					<input type="checkbox" id="regressions-input" name="regressions" />
+					<label for="regressions-input">Regressions First</label>
+				</div>
 			</li>
-			<li><a href="?benchmark=all">All benchmarks</a></li>
-			<li><a href="?benchmark=regressions">Regressions first</a></li>
 			<span class="left-separator"></span>
 			<li>
 				Repository:
@@ -388,10 +390,22 @@ function prefillSearch(formFields) {
 		input.value = benchmark;
 	}
 
+	let pkg = params.get('package');
+	if (pkg) {
+		let input = document.getElementById('package-input');
+		input.value = pkg;
+	}
+
 	let unit = params.get('unit');
 	if (unit) {
 		let input = document.getElementById('unit-input');
 		input.value = unit;
+	}
+
+	let regressions = params.get('regressions');
+	if (regressions === "on") {
+		let input = document.getElementById('regressions-input');
+		input.checked = true;
 	}
 
 	let repository = params.get('repository');
