@@ -248,7 +248,7 @@ function addTable(bench, unit, repository, commits) {
 	const createCommitCell = function(commit, repository) {
 		const commitHash = createCell("", false);
 		const commitLink = document.createElement("a");
-		commitLink.href = "https://go.googlesource.com/" + repository + "/+show/" + commit;
+		commitLink.href = "https://github.com/cockroachdb/" + repository + "/commit/" + commit;
 		commitLink.textContent = commit.slice(0, 7);
 		commitHash.appendChild(commitLink);
 		commitHash.classList.add("Dashboard-table-commit");
