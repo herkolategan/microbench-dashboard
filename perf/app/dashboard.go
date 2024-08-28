@@ -604,7 +604,7 @@ func (a *App) dashboardData(w http.ResponseWriter, r *http.Request) {
 	benchmark := r.FormValue("benchmark")
 	regressions := r.FormValue("regressions") == "on"
 
-	pkg := "^pkg/bench"
+	pkg := "pkg/bench$"
 	if r.Form.Has("package") {
 		pkg = r.FormValue("package")
 	}

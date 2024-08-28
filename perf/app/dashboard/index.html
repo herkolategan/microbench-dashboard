@@ -395,7 +395,7 @@ function prefillSearch(formFields) {
 	if (pkg) {
 		pkgInput.value = pkg;
 	} else {
-		pkgInput.value = "^pkg/bench"
+		pkgInput.value = "pkg/bench$"
 	}
 
 	let unit = params.get('unit');
