@@ -602,7 +602,12 @@ func (a *App) dashboardData(w http.ResponseWriter, r *http.Request) {
 
 	benchmark := r.FormValue("benchmark")
 	regressions := r.FormValue("regressions") == "on"
-	pkg := r.FormValue("package")
+
+	pkg := "^pkg/bench"
+	if r.Form.Has("package") {
+		pkg = r.FormValue("package")
+	}
+
 	unit := r.FormValue("unit")
 	var benchmarks []*BenchmarkJSON
 

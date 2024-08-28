@@ -391,9 +391,11 @@ function prefillSearch(formFields) {
 	}
 
 	let pkg = params.get('package');
+	let pkgInput = document.getElementById('package-input');
 	if (pkg) {
-		let input = document.getElementById('package-input');
-		input.value = pkg;
+		pkgInput.value = pkg;
+	} else {
+		pkgInput.value = "^pkg/bench"
 	}
 
 	let unit = params.get('unit');
