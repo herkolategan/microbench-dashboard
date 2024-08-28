@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/exp/maps"
 	"log"
 	"math"
 	"net/http"
@@ -652,12 +653,13 @@ func (a *App) dashboardData(w http.ResponseWriter, r *http.Request) {
 }
 
 func commitsFromBenchmarks(benchmarks []*BenchmarkJSON) []Commit {
-	commits := make([]Commit, 0)
+	commitsMap := make(map[string]Commit)
 	for _, b := range benchmarks {
 		for _, v := range b.Values {
-			commits = append(commits, Commit{Hash: v.CommitHash, Date: v.CommitDate})
+			commitsMap[v.CommitHash] = Commit{Hash: v.CommitHash, Date: v.CommitDate}
 		}
 	}
+	commits := maps.Values(commitsMap)
 	sort.Slice(commits, func(i, j int) bool {
 		return commits[i].Date.Before(commits[j].Date)
 	})
