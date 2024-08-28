@@ -329,7 +329,7 @@ function addTable(bench, unit, repository, commits) {
 			row.appendChild(createCommitCell(v.BaselineCommitHash, repository));
 
 			// Benchmarks commit hash.
-			row.appendChild(createCommitCell(v.BenchmarksCommitHash, "benchmarks"));
+			row.appendChild(createCommitCell(v.BenchmarksCommitHash, repository));
 		} else {
 			// Row without info.
 			const range = createCell("", false);
