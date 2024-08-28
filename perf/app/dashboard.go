@@ -531,7 +531,7 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 }
 
 const (
-	defaultDays = 30
+	defaultDays = 90
 	maxDays     = 366
 )
 
