@@ -174,7 +174,7 @@ function addCharts(benchmarks, repository, commits) {
 					const title = `affected/package: ${regression}% regression in ${bench.Name} ${bench.Unit} at ${shortCommit}`;
 					const body = `Discovered a regression in ${bench.Unit} of ${regression}% for benchmark ${bench.Name} at ${shortCommit}.\n\n<ADD MORE DETAILS>.`
 					let query = `?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}&labels=Performance`;
-					p.innerHTML += ` <a href="https://github.com/golang/go/issues/new${query}">File an issue</a>.`;
+					p.innerHTML += ` <a href="https://github.com/cockroachdb/cockroach/issues/new${query}">File an issue</a>.`;
 				} else {
 					// Include a grinning emoji if it's an improvement.
 					p.innerHTML += ` <span style="font-style: normal;">&#128513;</span>`;
