@@ -394,7 +394,7 @@ function prefillSearch(formFields) {
 	let pkgInput = document.getElementById('package-input');
 	if (pkg) {
 		pkgInput.value = pkg;
-	} else {
+	} else if(!params.has('package')) {
 		pkgInput.value = "pkg/bench$"
 	}
 

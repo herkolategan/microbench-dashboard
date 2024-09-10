@@ -191,16 +191,6 @@ from(bucket: "%s")
 	return b[0], nil
 }
 
-// fetchDefaultBenchmarks queries Influx for the default benchmark set.
-func fetchDefaultBenchmarks(ctx context.Context, qc api.QueryAPI, regressions bool, start, end time.Time, repository, branch string) ([]*BenchmarkJSON, error) {
-	if repository != "cockroach" {
-		// No defaults defined for other subrepos yet, just return an
-		// empty set.
-		return nil, nil
-	}
-	return fetchNamedBenchmark(ctx, qc, regressions, start, end, repository, branch, ".*", "pkg/bench/tpcc")
-}
-
 // fetchNamedBenchmark queries Influx for all benchmark results with the passed
 // name (for all units).
 func fetchNamedBenchmark(ctx context.Context, qc api.QueryAPI, regressions bool, start, end time.Time, repository, branch, name, pkg string) ([]*BenchmarkJSON, error) {
@@ -619,10 +609,8 @@ func (a *App) dashboardData(w http.ResponseWriter, r *http.Request) {
 		if result != nil && err == nil {
 			benchmarks = []*BenchmarkJSON{result}
 		}
-	} else if benchmark == "" || pkg != "" {
-		benchmarks, err = fetchNamedBenchmark(ctx, qc, regressions, start, end, repository, branch, benchmark, pkg)
 	} else {
-		benchmarks, err = fetchDefaultBenchmarks(ctx, qc, regressions, start, end, repository, branch)
+		benchmarks, err = fetchNamedBenchmark(ctx, qc, regressions, start, end, repository, branch, benchmark, pkg)
 	}
 
 	if errors.Is(err, errBenchmarkNotFound) {
