@@ -37,6 +37,10 @@ license that can be found in the LICENSE file.
 					<input id="unit-input" type="text" name="unit" placeholder="Unit (optional)" />
 				</div>
 				<input type="submit" />
+				<div class="Dashboard-search-regex">
+					<input type="checkbox" id="regex-input" name="regex" />
+					<label for="regex-input">RegEx</label>
+				</div>
 				<div class="Dashboard-search-regressions">
 					<input type="checkbox" id="regressions-input" name="regressions" />
 					<label for="regressions-input">Regressions First</label>
@@ -395,13 +399,19 @@ function prefillSearch(formFields) {
 	if (pkg) {
 		pkgInput.value = pkg;
 	} else if(!params.has('package')) {
-		pkgInput.value = "pkg/bench$"
+		pkgInput.value = "pkg/bench"
 	}
 
 	let unit = params.get('unit');
 	if (unit) {
 		let input = document.getElementById('unit-input');
 		input.value = unit;
+	}
+
+	let regex = params.get('regex');
+	if (regex === "on") {
+		let input = document.getElementById('regex-input');
+		input.checked = true;
 	}
 
 	let regressions = params.get('regressions');

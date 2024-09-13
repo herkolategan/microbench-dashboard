@@ -109,6 +109,10 @@ nav .left-separator {
   padding-left: 0.5rem;
 }
 
+.Dashboard-search-regex {
+  display: inline-block;
+  width: 80px;
+}
 .Dashboard-search-regressions {
   display: inline-block;
   width: 160px;
