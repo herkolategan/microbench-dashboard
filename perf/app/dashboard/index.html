@@ -189,6 +189,7 @@ function addCharts(benchmarks, repository, commits) {
 			item.appendChild(p);
 		}
 		item.appendChild(BandChart(bench.Values, {
+			pkg: bench.Package,
 			benchmark: bench.Name,
 			unit: bench.Unit,
 			repository: repository,
