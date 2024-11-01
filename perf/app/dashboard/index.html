@@ -266,7 +266,7 @@ function addTable(bench, unit, repository, commits) {
 	header.appendChild(createCell("Experiment commit", true));
 	header.appendChild(createCell("Delta", true));
 	header.appendChild(createCell("Baseline commit", true));
-	header.appendChild(createCell("benchmarks commit", true));
+	header.appendChild(createCell("runner commit", true));
 	table.appendChild(header);
 
 	// Find the min and max.
@@ -333,7 +333,7 @@ function addTable(bench, unit, repository, commits) {
 			// Baseline commit hash.
 			row.appendChild(createCommitCell(v.BaselineCommitHash, repository));
 
-			// Benchmarks commit hash.
+			// Runner commit hash (named Benchmarks commit internally / in influx).
 			row.appendChild(createCommitCell(v.BenchmarksCommitHash, repository));
 		} else {
 			// Row without info.
