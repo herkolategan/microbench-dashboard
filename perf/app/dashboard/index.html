@@ -7,89 +7,285 @@ license that can be found in the LICENSE file.
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<title>Performance Dashboard</title>
+	<title>CockroachDB Roachperf Dashboard</title>
 	<link rel="icon" href="https://www.cockroachlabs.com/favicon.ico"/>
 	<link rel="stylesheet" href="./static/style.css"/>
 	<script src="https://ajax.googleapis.com/ajax/libs/d3js/7.4.2/d3.min.js"></script>
 	<script src="./third_party/bandchart/bandchart.js"></script>
 	<script src="./static/range.js"></script>
+	<style>
+		/* Sidebar styles */
+		body.Dashboard {
+			margin: 0;
+			padding: 0;
+			overflow-x: hidden;
+		}
+		.dashboard-container {
+			display: flex;
+			position: relative;
+			min-height: calc(100vh - 40px);
+		}
+		.sidebar {
+			width: 280px;
+			background: #fff;
+			border-right: 1px solid #ddd;
+			overflow-y: auto;
+			transition: transform 0.3s ease;
+			position: sticky;
+			top: 0;
+			height: 100vh;
+			z-index: 100;
+		}
+		.sidebar.collapsed {
+			transform: translateX(-280px);
+		}
+		.main-content {
+			flex: 1;
+			transition: margin-left 0.3s ease;
+		}
+		.main-content.expanded {
+			margin-left: 0;
+		}
+		.sidebar-toggle {
+			position: absolute;
+			top: 70px;
+			right: -30px;
+			width: 30px;
+			height: 30px;
+			background: #f8f8f8;
+			border: 1px solid #ddd;
+			border-left: none;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			z-index: 100;
+		}
+		.sidebar-toggle:hover {
+			background: #eaeaea;
+		}
+		.sidebar-header {
+			padding: 15px;
+			border-bottom: 1px solid #ddd;
+			background: #f8f8f8;
+			position: sticky;
+			top: 0;
+			z-index: 10;
+		}
+		.sidebar-search {
+			padding: 10px 15px;
+			border-bottom: 1px solid #ddd;
+			background: #fff;
+			position: sticky;
+			top: 54px;
+			z-index: 9;
+		}
+		.sidebar-search input {
+			width: 100%;
+			padding: 8px;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+		}
+		.test-list {
+			padding: 0;
+			margin: 0;
+			list-style: none;
+			height: calc(100vh - 110px);
+			overflow-y: auto;
+		}
+		.test-item {
+			padding: 10px 15px;
+			border-bottom: 1px solid #eee;
+			transition: background 0.2s;
+		}
+		.test-item:hover {
+			background: #f5f5f5;
+		}
+		.test-item a {
+			color: #2c5282;
+			text-decoration: none;
+			display: block;
+			word-wrap: break-word;
+			white-space: normal;
+		}
+		.test-item a:hover {
+			text-decoration: underline;
+		}
+		.loading-tests {
+			padding: 15px;
+			text-align: center;
+			color: #666;
+		}
+		.topbar-with-controls {
+			position: sticky;
+			top: 0;
+			z-index: 50;
+			background: #fff;
+		}
+		
+		/* Baseline configuration styles */
+		.baseline-config {
+			margin-top: 10px;
+			padding: 10px;
+			background: #f8f8f8;
+			border-radius: 4px;
+		}
+		.baseline-label {
+			font-weight: bold;
+			color: #333;
+			margin-right: 10px;
+		}
+		.baseline-controls {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 15px;
+			margin-top: 5px;
+		}
+		.baseline-control {
+			display: flex;
+			align-items: center;
+			gap: 5px;
+		}
+		.baseline-control label {
+			font-weight: normal;
+			color: #666;
+		}
+		.baseline-control select,
+		.baseline-control input {
+			padding: 4px 8px;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+		}
+	</style>
 </head>
 
 <body class="Dashboard">
 
-<header class="Dashboard-topbar">
-	<h1>
-		<a href="/">CockroachDB Microbenchmark Dashboard</a>
-	</h1>
-</header>
+<div class="dashboard-container">
+	<!-- Sidebar -->
+	<div id="sidebar" class="sidebar">
+		<div class="sidebar-header">
+			<h3>Available Benchmarks</h3>
+		</div>
+		<div class="sidebar-search">
+			<input type="text" id="sidebar-search-input" placeholder="Search tests...">
+		</div>
+		<div id="sidebar-tests" class="test-list">
+			<div class="loading-tests">Loading tests...</div>
+		</div>
+		<div class="sidebar-toggle" id="sidebar-toggle">
+			&lt;
+		</div>
+	</div>
 
-<nav class="Dashboard-controls">
-	<form autocomplete="off" action="./">
-		<ul>
-			<li>
-				<div class="Dashboard-search-package">
-					<input id="package-input" type="text" name="package" placeholder="Package (optional)" />
-				</div>
-				<div class="Dashboard-search-benchmark">
-					<input id="benchmark-input" type="text" name="benchmark" placeholder="Type benchmark name..." />
-				</div>
-				<div class="Dashboard-search-unit">
-					<input id="unit-input" type="text" name="unit" placeholder="Unit (optional)" />
-				</div>
-				<input type="submit" />
-				<div class="Dashboard-search-regex">
-					<input type="checkbox" id="regex-input" name="regex" />
-					<label for="regex-input">RegEx</label>
-				</div>
-				<div class="Dashboard-search-regressions">
-					<input type="checkbox" id="regressions-input" name="regressions" />
-					<label for="regressions-input">Regressions First</label>
-				</div>
-			</li>
-			<span class="left-separator"></span>
-			<li>
-				Repository:
-				<select id="repository-select" name="repository">
-					<option>cockroach</option>
-				</select>
-				branch:
-				<select id="branch-select" name="branch"></select>
-				Duration (days):
-				<div class="Dashboard-duration">
-					<input id="days-input" type="number" name="days" value="90" />
-				</div>
-				End (UTC): <input id="end-input" type="datetime-local" name="end" />
-				<input type="submit">
-			</li>
-		</ul>
-	</form>
-</nav>
+	<!-- Main content -->
+	<div id="main-content" class="main-content">
+		<div class="topbar-with-controls">
+			<header class="Dashboard-topbar">
+				<h1>
+					<a href="/">CockroachDB Roachperf Dashboard</a>
+				</h1>
+			</header>
 
-<div class="Dashboard-documentation">
-	<p>
-		Each graph displays benchmark results relative to its baseline
-		commit, which is usually the latest stable release at
-		the time of testing. The 95% confidence interval is displayed
-		in light gray. On hover, the graph displays the benchmarked
-		commit at that point (click to view full commit).
-	</p>
-	<p>
-		Note that some commits are not tested, so there could be
-		multiple commits (not shown) between two points on the graph.
-	</p>
-	<p>
-		Using the 'unit' search box above leads to a page that shows much
-		more detail about each individual point in the selected time range.
-		Another way of reaching this page is to click the unit name that acts
-		as each graph's title, i.e. "sec/op".
-	</p>
+			<nav class="Dashboard-controls">
+				<form autocomplete="off" action="./">
+					<ul>
+						<li>
+							<div class="Dashboard-search-benchmark">
+								<input id="benchmark-input" type="text" name="benchmark" placeholder="Type benchmark name..." />
+							</div>
+							<div class="Dashboard-search-unit">
+								<input id="unit-input" type="text" name="unit" placeholder="Metric (optional)" />
+							</div>
+							<input type="submit" />
+							<div class="Dashboard-search-regex">
+								<input type="checkbox" id="regex-input" name="regex" />
+								<label for="regex-input">RegEx</label>
+							</div>
+							<div class="Dashboard-search-regressions">
+								<input type="checkbox" id="regressions-input" name="regressions" />
+								<label for="regressions-input">Regressions First</label>
+							</div>
+						</li>
+						<span class="left-separator"></span>
+						<li>
+							Cloud:
+							<select id="cloud-select" name="cloud"></select>
+							branch:
+							<select id="branch-select" name="branch"></select>
+							goos:
+							<select id="goos-select" name="goos"></select>
+							goarch:
+							<select id="goarch-select" name="goarch"></select>
+							Duration (days):
+							<div class="Dashboard-duration">
+								<input id="days-input" type="number" name="days" value="90" />
+							</div>
+							End (UTC): <input id="end-input" type="date" name="end" />
+							<input type="submit">
+						</li>
+						<li class="baseline-config">
+							<span class="baseline-label">Baseline Configuration:</span>
+							<div class="baseline-controls">
+								<div class="baseline-control">
+									<label for="baseline-cloud-select">Cloud:</label>
+									<select id="baseline-cloud-select" name="baseline_cloud"></select>
+								</div>
+								<div class="baseline-control">
+									<label for="baseline-branch-select">Branch:</label>
+									<select id="baseline-branch-select" name="baseline_branch"></select>
+								</div>
+								<div class="baseline-control">
+									<label for="baseline-goos-select">Goos:</label>
+									<select id="baseline-goos-select" name="baseline_goos"></select>
+								</div>
+								<div class="baseline-control">
+									<label for="baseline-goarch-select">Goarch:</label>
+									<select id="baseline-goarch-select" name="baseline_goarch"></select>
+								</div>
+								<div class="baseline-control">
+									<label for="baseline-date-input">Date (UTC):</label>
+									<input id="baseline-date-input" type="date" name="baseline_date" />
+								</div>
+							</div>
+						</li>
+					</ul>
+				</form>
+			</nav>
+		</div>
+
+		<div class="Dashboard-documentation">
+			<p>
+				This dashboard visualizes benchmark results for CockroachDB, helping you track performance trends over time.
+				Each graph shows results relative to a <strong>baseline commit</strong> at the time of testing.
+				Hover over any point to see details about the corresponding commit; click to view the full commit on GitHub.
+			</p>
+			<p>
+				Please note that not every commit is benchmarked, so there may be gaps between points on the graph.
+				To explore detailed data for individual points, use the <strong>Metric</strong> search box above,
+				or simply click the metric name from the left sidebar.
+				This will take you to a page with in-depth information for each data point in your selected time range.
+			</p>
+			<p>
+				<strong>Baseline Comparison:</strong>
+				You can compare current results against a specific baseline configuration by selecting the desired cloud, branch, and date in the <strong>Baseline Configuration</strong> section.
+				When a baseline is set, each data point is compared to the corresponding metric from your chosen baseline,
+				allowing you to quickly spot performance changes between branches, environments, or over time.
+				All comparisons are calculated locally for instant feedback, making it easy to identify regressions or improvements.
+			</p>
+			<p>
+				<strong>Grafana</strong>
+				You can also explore the raw data in Grafana by clicking at the test name at the top of any graph/table.
+			</p>
+		</div>
+
+		<grid id="dashboard">
+			<grid id="loading" class="Dashboard-section Dashboard-section-expand">
+				<h2 class="Dashboard-title" id="loading">Loading...</h2>
+			</grid>
+		</grid>
+	</div>
 </div>
-
-<grid id="dashboard">
-	<grid id="loading" class="Dashboard-section Dashboard-section-expand">
-		<h2 class="Dashboard-title" id="loading">Loading...</h2>
-	</grid>
-</grid>
 
 <script>
 // minViewPercentDelta represents the minimum range we're willing to
@@ -120,10 +316,71 @@ function removeLoadingMessage() {
 	loading.parentNode.removeChild(loading);
 }
 
-function addCharts(benchmarks, repository, commits) {
+let annotations = null;
+let dashboardIds = null;
+let grafanaBaseUrl = null;
+
+// Fetch dashboard IDs from YAML
+async function fetchDashboardIds() {
+	try {
+		// console.log('Fetching dashboard IDs...');
+		const response = await fetch('./grafana_dashboards.yaml');
+		if (!response.ok) {
+			throw new Error('Failed to fetch dashboard IDs');
+		}
+		const yamlText = await response.text();
+		// Parse YAML text into object
+		const lines = yamlText.split('\n');
+		dashboardIds = {};
+		lines.forEach(line => {
+			const [name, id] = line.split(':').map(s => s.trim());
+			if (name && id) {
+				dashboardIds[name] = id;
+			}
+		});
+		console.log('Successfully fetched dashboard IDs:', dashboardIds);
+	} catch (error) {
+		console.error('Error fetching dashboard IDs:', error);
+		dashboardIds = {};
+	}
+}
+
+// Fetch annotations from the server
+async function fetchAnnotations() {
+	try {
+		console.log('Fetching annotations...');
+		const response = await fetch('/dashboard/annotations.json');
+		if (!response.ok) {
+			throw new Error('Failed to fetch annotations');
+		}
+		annotations = await response.json();
+		console.log('Successfully fetched annotations:', annotations);
+	} catch (error) {
+		console.error('Error fetching annotations:', error);
+		annotations = { global: [], tests: {} };
+	}
+}
+
+async function addCharts(benchmarks, repository, commits) {
 	let dashboard = document.getElementById("dashboard");
 
 	removeLoadingMessage();
+
+	// Fetch dashboard IDs if not already fetched
+	if (!dashboardIds) {
+		console.log('Dashboard IDs not loaded yet, fetching...');
+		await fetchDashboardIds();
+	}
+
+	// Fetch annotations if not already fetched
+	if (!annotations) {
+		console.log('Annotations not loaded yet, fetching...');
+		await fetchAnnotations();
+	}
+
+	// Get current URL parameters
+	const urlParams = new URLSearchParams(window.location.search);
+	const hasBaseline = urlParams.has('baseline_date');
 
 	let prevName = "";
 	let grid = null;
@@ -139,12 +396,42 @@ function addCharts(benchmarks, repository, commits) {
 			dashboard.appendChild(section);
 
 			let link = document.createElement("a");
-			link.href = "?benchmark=" + bench.Name + "&package=" + bench.Package;
-			link.textContent = bench.Package + "→" + bench.Name;
+			// Create URL with all current parameters
+			const linkParams = new URLSearchParams(window.location.search);
+			linkParams.set("benchmark", bench.Name);
+			const dashboardId = dashboardIds[bench.Name];
+			if (dashboardId) {
+				const grafanaParams = getGrafanaParams(urlParams);
+				link.href = `${grafanaBaseUrl}/d/${dashboardId}?${grafanaParams}`;
+			} else {
+				link.href = `?${linkParams.toString()}`;
+			}
+			link.textContent = bench.Name;
 
 			let title = document.createElement("h2");
 			title.classList.add("Dashboard-title");
 			title.appendChild(link);
+
+			// Add baseline indicator if applicable
+			if (hasBaseline) {
+				const baselineCloud = urlParams.get('baseline_cloud');
+				const baselineBranch = urlParams.get('baseline_branch');
+				const baselineDate = urlParams.get('baseline_date');
+				
+				let baselineText = ` (baseline: `;
+				if (baselineBranch) baselineText += `${baselineBranch} `;
+				if (baselineCloud) baselineText += `on ${baselineCloud} `;
+				if (baselineDate) baselineText += `at ${baselineDate}`;
+				baselineText += `)`;
+				
+				let baselineIndicator = document.createElement("span");
+				baselineIndicator.textContent = baselineText;
+				baselineIndicator.style.fontSize = "smaller";
+				baselineIndicator.style.fontWeight = "normal";
+				baselineIndicator.style.fontStyle = "italic";
+				title.appendChild(baselineIndicator);
+			}
+
 			section.appendChild(title);
 
 			grid = document.createElement("grid");
@@ -161,7 +448,9 @@ function addCharts(benchmarks, repository, commits) {
 			if (r.DeltaIndex >= 0) {
 				// Generate some text indicating the regression.
 				const rd = bench.Values[r.DeltaIndex];
-				const regression = (Math.abs(r.Change)*100).toFixed(2);
+				
+				// Format percentages consistently - the values are already in decimal form (0.2175 = 21.75%)
+				const regressionPercent = (Math.abs(r.Change)*100).toFixed(2);
 				const shortCommit = rd.CommitHash.slice(0, 7);
 				let diffText = "regression";
 				let isRegression = true;
@@ -171,31 +460,76 @@ function addCharts(benchmarks, repository, commits) {
 					diffText = "improvement";
 					isRegression = false;
 				}
-				p.innerHTML = `${regression}% ${diffText}, ${(r.Delta*100).toFixed(2)}%-point change at <a href="?benchmark=${bench.Name}&unit=${bench.Unit}&package=${bench.Package}#${commitToId(rd.CommitHash)}">${shortCommit}</a>.`;
+				
+				// Get baseline parameters
+				const baselineCloud = urlParams.get('baseline_cloud');
+				const baselineBranch = urlParams.get('baseline_branch');
+				const baselineDate = urlParams.get('baseline_date');
+				
+				// Generate the baseline parameter string
+				let baselineParams = '';
+				if (baselineCloud) baselineParams += `&baseline_cloud=${baselineCloud}`;
+				if (baselineBranch) baselineParams += `&baseline_branch=${baselineBranch}`;
+				if (baselineDate) baselineParams += `&baseline_date=${baselineDate}`;
+				
+				// Create the exact format seen in the screenshot
+				p.innerHTML = `${regressionPercent}% ${diffText} at commit <a href="?benchmark=${bench.Name}&unit=${bench.Unit}${baselineParams}#commit${rd.CommitHash}">${shortCommit}</a> <a href="#" class="file-issue">File an issue</a>`;
 
 				// Add a link to file a bug.
 				if (isRegression) {
-					const title = `affected/package: ${regression}% regression in ${bench.Name} ${bench.Unit} at ${shortCommit}`;
-					const body = `Discovered a regression in ${bench.Unit} of ${regression}% for benchmark ${bench.Name} at ${shortCommit}.\n\n<ADD MORE DETAILS>.`
+					const title = `affected: ${regressionPercent}% regression in ${bench.Name} ${bench.Unit} at ${shortCommit}`;
+					const body = `Discovered a regression in ${bench.Unit} of ${regressionPercent}% for benchmark ${bench.Name} at ${shortCommit}.\n\n<ADD MORE DETAILS>.`
 					let query = `?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}&labels=Performance`;
-					p.innerHTML += ` <a href="https://github.com/cockroachdb/cockroach/issues/new${query}">File an issue</a>.`;
+					
+					// Add click event for "File an issue" link
+					setTimeout(() => {
+						const fileIssueLink = p.querySelector('.file-issue');
+						if (fileIssueLink) {
+							fileIssueLink.href = `https://github.com/cockroachdb/cockroach/issues/new${query}`;
+						}
+					}, 0);
 				} else {
 					// Include a grinning emoji if it's an improvement.
 					p.innerHTML += ` <span style="font-style: normal;">&#128513;</span>`;
+					
+					// Remove the "File an issue" link for improvements
+					setTimeout(() => {
+						const fileIssueLink = p.querySelector('.file-issue');
+						if (fileIssueLink) {
+							fileIssueLink.parentNode.removeChild(fileIssueLink);
+						}
+					}, 0);
 				}
 			} else {
-				p.textContext = `Not ranked because ${r.IgnoredBecause}.`;
+				p.textContent = `Not ranked because ${r.IgnoredBecause}.`;
 			}
 			item.appendChild(p);
 		}
+
+		// Get annotations for this benchmark
+		const benchmarkAnnotations = [
+			...annotations.global,
+			...Object.entries(annotations.tests || {})
+				.filter(([pattern, _]) => {
+					try {
+						const regex = new RegExp(pattern);
+						return regex.test(bench.Name);
+					} catch (e) {
+						console.error(`Invalid regex pattern: ${pattern}`, e);
+						return false;
+					}
+				})
+				.flatMap(([_, anns]) => anns)
+		];
+
 		item.appendChild(BandChart(bench.Values, {
-			pkg: bench.Package,
 			benchmark: bench.Name,
-			unit: bench.Unit,
-			repository: repository,
+			unit: bench.Metric + " (" + bench.Unit + ")",
+			cloud: cloudProvider,
 			minViewDeltaPercent: minViewDeltaPercent,
 			higherIsBetter: bench.HigherIsBetter,
 			history: commits,
+			annotations: benchmarkAnnotations,
 		}));
 		grid.appendChild(item);
 		addedChart = true;
@@ -216,24 +550,39 @@ function idToCommit(id) {
 	return null;
 }
 
-function addTable(bench, unit, repository, commits) {
+async function addTable(bench, unit, repository, commits) {
 	let commitSelected = idToCommit(window.location.hash.slice(1));
 	let dashboard = document.getElementById("dashboard");
 
 	removeLoadingMessage();
+	
+	// Fetch dashboard IDs if not already fetched
+	if (!dashboardIds) {
+		console.log('Dashboard IDs not loaded yet, fetching...');
+		await fetchDashboardIds();
+	}
+
+	console.log("Adding table for benchmark:", bench.Name, "with", bench.Values.length, "values and", commits.length, "commits");
 
 	let section = document.createElement("grid");
 	section.classList.add("Dashboard-section");
 	section.classList.add("Dashboard-section-expand");
 	dashboard.appendChild(section);
 
-	let link = document.createElement("a");
-	link.href = "?benchmark=" + bench.Name + "&unit=" + unit + "&package=" + bench.Package
-	link.textContent = bench.Package + "→" + bench.Name + " (" + unit + ")";
+	let link = document.createElement("h2");
+	const dashboardId = dashboardIds[bench.Name];
+	if (dashboardId) {
+		const urlParams = new URLSearchParams(window.location.search);
+		const tableGrafanaParams = getGrafanaParams(urlParams);
+		link.innerHTML = `<a href="${grafanaBaseUrl}/d/${dashboardId}?${tableGrafanaParams}">${bench.Name} (${unit})</a>`;
+	} else {
+		link.textContent = bench.Name + " (" + unit + ")";
+	}
 
 	let title = document.createElement("h2");
 	title.classList.add("Dashboard-title");
 	title.appendChild(link);
+
 	section.appendChild(title);
 
 	const table = document.createElement("table");
@@ -263,46 +612,93 @@ function addTable(bench, unit, repository, commits) {
 	// Create the header.
 	const header = document.createElement("tr");
 	header.appendChild(createCell("Date", true));
-	header.appendChild(createCell("Experiment commit", true));
+	header.appendChild(createCell("Current Commit", true));
+	header.appendChild(createCell("Baseline Commit", true));
 	header.appendChild(createCell("Delta", true));
-	header.appendChild(createCell("Baseline commit", true));
-	header.appendChild(createCell("runner commit", true));
 	table.appendChild(header);
 
 	// Find the min and max.
-	let min = bench.Values[0].Low;
-	let max = bench.Values[0].High;
-	for (let i = 1; i < bench.Values.length; i++) {
-		if (bench.Values[i].Low < min) {
-			min = bench.Values[i].Low;
+	let min = Number.POSITIVE_INFINITY;
+	let max = Number.NEGATIVE_INFINITY;
+	
+	for (let i = 0; i < bench.Values.length; i++) {
+		const v = bench.Values[i];
+		if (v.Low < min) {
+			min = v.Low;
 		}
-		if (bench.Values[i].High > max) {
-			max = bench.Values[i].High;
+		if (v.High > max) {
+			max = v.High;
 		}
+	}
+	
+	console.log("Min and max values:", min, max);
+	
+	// If we somehow didn't find any valid min/max values, set defaults
+	if (min === Number.POSITIVE_INFINITY || max === Number.NEGATIVE_INFINITY) {
+		console.warn("Invalid min/max values, using defaults");
+		min = -0.1;
+		max = 0.1;
 	}
 
 	// Clamp for presentation.
+	console.log("Before clamping, min/max:", min, max);
+	
 	if (min < 0 && min > -minViewDeltaPercent) {
-		min = -minViewDeltaPercent
+		min = -minViewDeltaPercent;
 	}
 	if (max > 0 && max < minViewDeltaPercent) {
-		max = minViewDeltaPercent
+		max = minViewDeltaPercent;
 	}
 	if (max-min < 2*minViewDeltaPercent) {
 		const amt = (2*minViewDeltaPercent-(max-min))/2;
 		max += amt;
 		min -= amt;
 	}
+	
+	// Ensure we don't have NaN values after clamping
+	if (isNaN(min) || isNaN(max)) {
+		console.error("NaN values after clamping, using defaults");
+		min = -minViewDeltaPercent;
+		max = minViewDeltaPercent;
+	}
+	
+	console.log("After clamping, min/max:", min, max);
 
 	// Create a map of hashes to values.
-	let valuesByCommit = new Map();
+	let valuesByCommit = {};
 	for (let i = 0; i < bench.Values.length; i++) {
-		valuesByCommit.set(bench.Values[i].CommitHash, bench.Values[i])
+		const val = bench.Values[i];
+		if (!valuesByCommit[val.CommitHash]) {
+			valuesByCommit[val.CommitHash] = val;
+		} else {
+			// If we already have a value for this commit hash, 
+			// log it but don't add a duplicate entry
+			console.log("Skipping duplicate value for commit:", val.CommitHash);
+		}
 	}
+	
+	console.log("valuesByCommit structure:", Object.keys(valuesByCommit).length, "commit hashes found");
+	if (Object.keys(valuesByCommit).length === 0) {
+		console.warn("No commits found in valuesByCommit map!");
+	} else {
+		// Log a sample of the first commit's values
+		const sampleCommit = Object.keys(valuesByCommit)[0];
+		console.log("Sample commit", sampleCommit);
+		console.log("Sample value:", valuesByCommit[sampleCommit]);
+	}
+	
+	// Check for mismatched commit hashes
+	const commitHashesInData = new Set(Object.keys(valuesByCommit));
+	const commitHashesInCommits = new Set(commits.map(c => c.Hash));
+	console.log("Commits in data but not in commits array:", 
+		[...commitHashesInData].filter(hash => !commitHashesInCommits.has(hash)).length);
+	console.log("Commits in commits array but not in data:", 
+		[...commitHashesInCommits].filter(hash => !commitHashesInData.has(hash)).length);
 
 	// Iterate backwards, showing the most recent first.
 	for (let i = commits.length-1; i >= 0; i--) {
 		const c = commits[i];
+		console.log("Processing commit:", c.Hash, "date:", c.Date);
 
 		// Create a row per value.
 		const row = document.createElement("tr");
@@ -310,48 +706,120 @@ function addTable(bench, unit, repository, commits) {
 			row.classList.add("selected");
 		}
 
-		// Commit date.
-		row.appendChild(createCell(Intl.DateTimeFormat([], {
+		// Date cell
+		const dateCell = createCell(Intl.DateTimeFormat([], {
 			dateStyle: "long",
-			timeStyle: "short",
-		}).format(c.Date), false));
+		}).format(c.Date), false);
+		dateCell.id = commitToId(c.Hash);
+		row.appendChild(dateCell);
 
-		// Commit hash.
-		const commitCell = createCommitCell(c.Hash, repository);
-		commitCell.id = commitToId(c.Hash);
-		row.appendChild(commitCell);
+		if (valuesByCommit[c.Hash]) {
+			console.log("Found value for commit:", c.Hash);
+			const v = valuesByCommit[c.Hash];
+			console.log("Using value:", v);
 
-		if (valuesByCommit.has(c.Hash)) {
-			const v = valuesByCommit.get(c.Hash);
+			// Current commit cell
+			const currentCommitCell = createCell("", false);
+			const currentCommitLink = document.createElement("a");
+			currentCommitLink.href = "https://github.com/cockroachdb/cockroach/commit/" + v.CommitHash;
+			currentCommitLink.textContent = v.CommitHash.slice(0, 7);
+			currentCommitLink.title = v.CommitHash;
+			currentCommitCell.appendChild(currentCommitLink);
+			row.appendChild(currentCommitCell);
 
-			// Range visualization.
+			// Baseline commit cell
+			const baselineCommitCell = createCell("", false);
+			if (v.BaselineCommitHash) {
+				const baselineCommitLink = document.createElement("a");
+				baselineCommitLink.href = "https://github.com/cockroachdb/cockroach/commit/" + v.BaselineCommitHash;
+				baselineCommitLink.textContent = v.BaselineCommitHash.slice(0, 7);
+				baselineCommitLink.title = v.BaselineCommitHash;
+				baselineCommitCell.appendChild(baselineCommitLink);
+			} else {
+				baselineCommitCell.textContent = "N/A";
+			}
+			row.appendChild(baselineCommitCell);
+
+			// Delta cell
 			const range = createCell("", false);
-			range.appendChild(Range(v.Low, v.Center, v.High, min, max, 640, 48, bench.Unit, bench.HigherIsBetter));
-			range.classList.add("Dashboard-table-range")
-			row.appendChild(range);
-
-			// Baseline commit hash.
-			row.appendChild(createCommitCell(v.BaselineCommitHash, repository));
-
-			// Runner commit hash (named Benchmarks commit internally / in influx).
-			row.appendChild(createCommitCell(v.BenchmarksCommitHash, repository));
-		} else {
-			// Row without info.
-			const range = createCell("", false);
-			range.appendChild(NoDataRange(min, max, 640, 48));
+			try {
+				// Validate the values before creating range
+				if (v && typeof v.Low === 'number' && typeof v.Center === 'number' && typeof v.High === 'number') {
+					const rangeElement = Range(v.Low, v.Center, v.High, min, max, 600, 48, bench.Unit, bench.HigherIsBetter);
+					if (rangeElement) {
+						range.appendChild(rangeElement);
+					} else {
+						// Fallback if Range function fails
+						console.warn("Range function returned null, using fallback");
+						range.textContent = `${(v.Center * 100).toFixed(2)}% (${(v.Low * 100).toFixed(2)}% to ${(v.High * 100).toFixed(2)}%)`;
+					}
+				} else {
+					// Value is invalid
+					console.error("Invalid value object for Range:", v);
+					range.textContent = "Invalid data";
+				}
+			} catch (e) {
+				console.error("Error creating range visualization:", e);
+				range.textContent = v && typeof v.Center === 'number' ? 
+					`${(v.Center * 100).toFixed(2)}% (${(v.Low * 100).toFixed(2)}% to ${(v.High * 100).toFixed(2)}%)` : 
+					"Error displaying value";
+			}
 			range.classList.add("Dashboard-table-range");
 			row.appendChild(range);
+		} else {
+			console.log("No value found for commit:", c.Hash);
+			// Current commit cell
+			const currentCommitCell = createCell("N/A", false);
+			row.appendChild(currentCommitCell);
 
-			const baselineNA = createCell("N/A", false);
-			baselineNA.classList.add("Dashboard-table-commit");
-			row.appendChild(baselineNA);
+			// Baseline commit cell
+			const baselineCommitCell = createCell("N/A", false);
+			row.appendChild(baselineCommitCell);
 
-			const benchmarksNA = createCell("N/A", false);
-			benchmarksNA.classList.add("Dashboard-table-commit");
-			row.appendChild(benchmarksNA);
+			// Delta cell
+			const range = createCell("", false);
+			try {
+				console.log("Creating NoDataRange with min, max:", min, max);
+				// Validate min and max before creating range
+				if (typeof min === 'number' && typeof max === 'number' && !isNaN(min) && !isNaN(max)) {
+					const noDataElement = NoDataRange(min, max, 600, 48);
+					if (noDataElement) {
+						range.appendChild(noDataElement);
+					} else {
+						// Fallback if NoDataRange function fails
+						console.warn("NoDataRange function returned null, using fallback");
+						range.textContent = "No data available";
+					}
+				} else {
+					// Invalid min/max
+					console.error("Invalid min/max for NoDataRange:", min, max);
+					range.textContent = "No data available";
+				}
+			} catch (e) {
+				console.error("Error creating no-data visualization:", e);
+				range.textContent = "No data available";
+			}
+			range.classList.add("Dashboard-table-range");
+			row.appendChild(range);
 		}
 
+		// Add row to table
 		table.appendChild(row);
+		
+		// Add click handler to highlight the selected row
+		row.addEventListener('click', function() {
+			// Remove selected class from all rows
+			const rows = table.querySelectorAll('tr');
+			rows.forEach(r => r.classList.remove('selected'));
+			
+			// Add selected class to this row
+			this.classList.add('selected');
+			
+			// Update URL hash to reflect selection
+			if (dateCell.id) {
+				window.location.hash = dateCell.id;
+			}
+		});
 	}
 
 	if (commitSelected) {
@@ -359,9 +827,19 @@ function addTable(bench, unit, repository, commits) {
 		// right one. The browser won't do this automatically because the anchors
 		// don't exist when the page is loaded.
 		const anchor = document.querySelector("#" + commitToId(commitSelected));
-		window.scrollTo({
-			top: anchor.getBoundingClientRect().top + window.pageYOffset - 20,
-		})
+		if (anchor) {
+			// Highlight the selected row
+			let row = anchor.closest('tr');
+			if (row) {
+				row.classList.add('selected');
+			}
+			
+			// Scroll to the selected row
+			window.scrollTo({
+				top: anchor.getBoundingClientRect().top + window.pageYOffset - 20,
+				behavior: 'smooth'
+			});
+		}
 	}
 }
 
@@ -395,14 +873,6 @@ function prefillSearch(formFields) {
 		input.value = benchmark;
 	}
 
-	let pkg = params.get('package');
-	let pkgInput = document.getElementById('package-input');
-	if (pkg) {
-		pkgInput.value = pkg;
-	} else if(!params.has('package')) {
-		pkgInput.value = "pkg/bench"
-	}
-
 	let unit = params.get('unit');
 	if (unit) {
 		let input = document.getElementById('unit-input');
@@ -421,10 +891,10 @@ function prefillSearch(formFields) {
 		input.checked = true;
 	}
 
-	let repository = params.get('repository');
-	if (repository) {
-		let select = document.getElementById('repository-select');
-		select.value = repository;
+	let cloud = params.get('cloud');
+	if (cloud) {
+		let select = document.getElementById('cloud-select');
+		select.value = cloud;
 	}
 
 	let branch = params.get('branch');
@@ -442,20 +912,83 @@ function prefillSearch(formFields) {
 		let input = document.getElementById('days-input');
 		input.value = days;
 	}
-
+	
 	let end = params.get('end');
 	let input = document.getElementById('end-input');
 	if (end) {
 		input.value = end;
 	} else {
-		// toISOString always uses UTC, then we just chop off the end
-		// of string to get the datetime-local format of
-		// 2000-12-31T15:00.
-		//
-		// Yes, this is really the suggested approach...
-		input.value = now.toISOString().slice(0, 16);
+		// Format today's date in UTC as YYYY-MM-DD
+		const today = new Date();
+		const year = today.getUTCFullYear();
+		const month = String(today.getUTCMonth() + 1).padStart(2, '0');
+		const day = String(today.getUTCDate()).padStart(2, '0');
+		input.value = `${year}-${month}-${day}`;
+	}
+	
+	// Handle baseline parameters
+	let baselineCloud = params.get('baseline_cloud');
+	if (baselineCloud) {
+		let select = document.getElementById('baseline-cloud-select');
+		select.value = baselineCloud;
+	} else {
+		// Default to same cloud as main selection
+		document.getElementById('baseline-cloud-select').value = 
+			document.getElementById('cloud-select').value;
+	}
+	
+	let baselineBranch = params.get('baseline_branch');
+	if (baselineBranch) {
+		let select = document.getElementById('baseline-branch-select');
+		if (baselineBranch === "latest-release") {
+			select.value = formFields.LatestReleaseBranch;
+		} else {
+			select.value = baselineBranch;
+		}
+	} else {
+		// Default to same branch as main selection if not specified
+		let mainBranch = document.getElementById('branch-select').value;
+		document.getElementById('baseline-branch-select').value = mainBranch;
+	}
+	
+	let baselineDate = params.get('baseline_date');
+	let baselineDateInput = document.getElementById('baseline-date-input');
+	if (baselineDate) {
+		baselineDateInput.value = baselineDate;
+	} else {
+		// Default to 45 days before end date
+		const endDate = new Date(input.value);
+		const defaultBaselineDate = new Date(endDate);
+		defaultBaselineDate.setDate(defaultBaselineDate.getDate() - 45);
+		
+		const year = defaultBaselineDate.getUTCFullYear();
+		const month = String(defaultBaselineDate.getUTCMonth() + 1).padStart(2, '0');
+		const day = String(defaultBaselineDate.getUTCDate()).padStart(2, '0');
+		baselineDateInput.value = `${year}-${month}-${day}`;
+	}
+
+	let goos = params.get('goos');
+	if (goos) {
+		let select = document.getElementById('goos-select');
+		select.value = goos;
+	}
+	let goarch = params.get('goarch');
+	if (goarch) {
+		let select = document.getElementById('goarch-select');
+		select.value = goarch;
+	}
+	let baselineGoos = params.get('baseline_goos');
+	if (baselineGoos) {
+		let select = document.getElementById('baseline-goos-select');
+		select.value = baselineGoos;
+	}
+	let baselineGoarch = params.get('baseline_goarch');
+	if (baselineGoarch) {
+		let select = document.getElementById('baseline-goarch-select');
+		select.value = baselineGoarch;
 	}
 }
+
 fetch('./formfields.json')
 	.then(response => {
 		if (!response.ok) {
@@ -464,6 +997,10 @@ fetch('./formfields.json')
 		return response.json();
 	})
 	.then(function(formFields) {
+		// Store the Grafana URL
+		grafanaBaseUrl = formFields.GrafanaURL;
+
+		
 		let select = document.getElementById('branch-select');
 		for (const i in formFields.Branches) {
 			var opt = document.createElement('option');
@@ -471,17 +1008,198 @@ fetch('./formfields.json')
 			opt.innerText = formFields.Branches[i];
 			select.appendChild(opt);
 		}
+		
+		// Also populate baseline branch select with the same options
+		let baselineSelect = document.getElementById('baseline-branch-select');
+		for (const i in formFields.Branches) {
+			var opt = document.createElement('option');
+			opt.value = formFields.Branches[i];
+			opt.innerText = formFields.Branches[i];
+			baselineSelect.appendChild(opt);
+		}
+		
 		prefillSearch(formFields);
 	});
 
 // Grab the repository so we can plumb it into UI elements.
 // prefillSearch set this up for us just now.
-const repository = document.getElementById('repository-select').value;
+const cloudProvider = document.getElementById('cloud-select').value;
 
 // Fetch content.
 let benchmark = (new URLSearchParams(window.location.search)).get('benchmark');
 let unit = (new URLSearchParams(window.location.search)).get('unit');
 let dataURL = './data.json' + window.location.search; // Pass through all URL params.
+
+// Function to fetch and populate cloud options
+function fetchAndPopulateClouds(testName) {
+    if (!testName) return;
+    
+    fetch(`./clouds.json?test=${encodeURIComponent(testName)}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch clouds');
+            }
+            return response.json();
+        })
+        .then(data => {
+            const cloudSelect = document.getElementById('cloud-select');
+            const baselineCloudSelect = document.getElementById('baseline-cloud-select');
+            
+            // Clear existing options
+            cloudSelect.innerHTML = '';
+            baselineCloudSelect.innerHTML = '';
+            
+            // Add new options
+            data.labels.forEach(cloud => {
+                const opt = document.createElement('option');
+                opt.value = cloud;
+                opt.textContent = cloud;
+                cloudSelect.appendChild(opt);
+                
+                // Clone for baseline select
+                const baselineOpt = opt.cloneNode(true);
+                baselineCloudSelect.appendChild(baselineOpt);
+            });
+            
+            // Restore selected values if they exist in the new options
+            const urlParams = new URLSearchParams(window.location.search);
+            const selectedCloud = urlParams.get('cloud');
+            const selectedBaselineCloud = urlParams.get('baseline_cloud');
+            
+            if (selectedCloud && data.labels.includes(selectedCloud)) {
+                cloudSelect.value = selectedCloud;
+            }
+            if (selectedBaselineCloud && data.labels.includes(selectedBaselineCloud)) {
+                baselineCloudSelect.value = selectedBaselineCloud;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching clouds:', error);
+        });
+}
+
+// Function to fetch and populate branch options
+function fetchAndPopulateBranches(testName) {
+    if (!testName) return;
+    
+    fetch(`./branches.json?test=${encodeURIComponent(testName)}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch branches');
+            }
+            return response.json();
+        })
+        .then(data => {
+            const branchSelect = document.getElementById('branch-select');
+            const baselineBranchSelect = document.getElementById('baseline-branch-select');
+            
+            // Clear existing options
+            branchSelect.innerHTML = '';
+            baselineBranchSelect.innerHTML = '';
+            
+            // Add new options
+            data.labels.forEach(branch => {
+                const opt = document.createElement('option');
+                opt.value = branch;
+                opt.textContent = branch;
+                branchSelect.appendChild(opt);
+                
+                // Clone for baseline select
+                const baselineOpt = opt.cloneNode(true);
+                baselineBranchSelect.appendChild(baselineOpt);
+            });
+            
+            // Restore selected values if they exist in the new options
+            const urlParams = new URLSearchParams(window.location.search);
+            const selectedBranch = urlParams.get('branch');
+            const selectedBaselineBranch = urlParams.get('baseline_branch');
+            
+            if (selectedBranch && data.labels.includes(selectedBranch)) {
+                branchSelect.value = selectedBranch;
+            }
+            if (selectedBaselineBranch && data.labels.includes(selectedBaselineBranch)) {
+                baselineBranchSelect.value = selectedBaselineBranch;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching branches:', error);
+        });
+}
+
+// Function to fetch and populate goos options
+function fetchAndPopulateGooses(testName) {
+    if (!testName) return;
+    fetch(`./gooses.json?test=${encodeURIComponent(testName)}`)
+        .then(response => response.json())
+        .then(data => {
+            const goosSelect = document.getElementById('goos-select');
+            const baselineGoosSelect = document.getElementById('baseline-goos-select');
+            goosSelect.innerHTML = '';
+            baselineGoosSelect.innerHTML = '';
+            data.labels.forEach(goos => {
+                const opt = document.createElement('option');
+                opt.value = goos;
+                opt.textContent = goos;
+                goosSelect.appendChild(opt);
+                baselineGoosSelect.appendChild(opt.cloneNode(true));
+            });
+            // Restore selected values from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const selectedGoos = urlParams.get('goos');
+            const selectedBaselineGoos = urlParams.get('baseline_goos');
+            if (selectedGoos && data.labels.includes(selectedGoos)) goosSelect.value = selectedGoos;
+            if (selectedBaselineGoos && data.labels.includes(selectedBaselineGoos)) baselineGoosSelect.value = selectedBaselineGoos;
+        })
+        .catch(error => console.error('Error fetching goos:', error));
+}
+
+// Function to fetch and populate goarch options
+function fetchAndPopulateGoarches(testName) {
+    if (!testName) return;
+    fetch(`./goarches.json?test=${encodeURIComponent(testName)}`)
+        .then(response => response.json())
+        .then(data => {
+            const goarchSelect = document.getElementById('goarch-select');
+            const baselineGoarchSelect = document.getElementById('baseline-goarch-select');
+            goarchSelect.innerHTML = '';
+            baselineGoarchSelect.innerHTML = '';
+            data.labels.forEach(goarch => {
+                const opt = document.createElement('option');
+                opt.value = goarch;
+                opt.textContent = goarch;
+                goarchSelect.appendChild(opt);
+                baselineGoarchSelect.appendChild(opt.cloneNode(true));
+            });
+            // Restore selected values from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const selectedGoarch = urlParams.get('goarch');
+            const selectedBaselineGoarch = urlParams.get('baseline_goarch');
+            if (selectedGoarch && data.labels.includes(selectedGoarch)) goarchSelect.value = selectedGoarch;
+            if (selectedBaselineGoarch && data.labels.includes(selectedBaselineGoarch)) baselineGoarchSelect.value = selectedBaselineGoarch;
+        })
+        .catch(error => console.error('Error fetching goarch:', error));
+}
+
+// Update all filters when benchmark changes
+const benchmarkInput = document.getElementById('benchmark-input');
+benchmarkInput.addEventListener('change', function() {
+    const testName = this.value;
+    if (testName) {
+        fetchAndPopulateClouds(testName);
+        fetchAndPopulateBranches(testName);
+        fetchAndPopulateGooses(testName);
+        fetchAndPopulateGoarches(testName);
+    }
+});
+
+// Initial population if benchmark is provided
+if (benchmark) {
+    fetchAndPopulateClouds(benchmark);
+    fetchAndPopulateBranches(benchmark);
+    fetchAndPopulateGooses(benchmark);
+    fetchAndPopulateGoarches(benchmark);
+}
+
 fetch(dataURL)
 	.then(response => {
 		if (!response.ok) {
@@ -504,7 +1222,13 @@ fetch(dataURL)
 			c.Date = new Date(c.Date);
 		})
 
-		// Figure out the date range we care about.
+		// Check if we should just show all benchmarks when no search is provided
+		// This makes the page serve as both the dashboard and test list
+		if (!benchmark && !unit) {
+			// Make sure sidebar is expanded by default on the main page
+			document.getElementById('sidebar').classList.remove('collapsed');
+			document.getElementById('main-content').classList.remove('expanded');
+		}
 
 		// If we have an explicit unit, then there should be just one result.
 		if (unit) {
@@ -512,11 +1236,125 @@ fetch(dataURL)
 				failure(benchmark, "got more that one benchmark when a unit was specified");
 				throw new Error("Data fetch failed");
 			}
-			addTable(benchmarks[0], unit, repository, commits);
+			addTable(benchmarks[0], unit, cloudProvider, commits);
 		} else {
-			addCharts(benchmarks, repository, commits);
+			addCharts(benchmarks, cloudProvider, commits);
 		}
 	});
+
+// Set up the params for the link to the unit page.
+let unitLinkParams = new URLSearchParams(window.location.search);
+unitLinkParams.set("unit", unit);
+unitLinkParams.set("benchmark", benchmark);
+// The rest of the parameters will be preserved automatically
+
+// Sidebar functionality
+function fetchTestsForSidebar() {
+    fetch('./tests.json')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch tests');
+            }
+            return response.json();
+        })
+        .then(data => {
+            populateSidebar(data.tests);
+        })
+        .catch(error => {
+            console.error('Error fetching tests for sidebar:', error);
+            document.getElementById('sidebar-tests').innerHTML = '<div class="error">Error loading tests</div>';
+        });
+}
+
+function populateSidebar(tests) {
+    const testList = document.getElementById('sidebar-tests');
+    testList.innerHTML = ''; // Clear loading message
+    
+    if (tests.length === 0) {
+        testList.innerHTML = '<div class="error">No tests found</div>';
+        return;
+    }
+    
+    // Get current URL parameters to preserve them in test links
+    const urlParams = new URLSearchParams(window.location.search);
+    const cloud = urlParams.get('cloud') || 'gce';
+    const branch = urlParams.get('branch') || 'master';
+    const days = urlParams.get('days') || '90';
+    
+    // Get baseline parameters
+    const baselineCloud = urlParams.get('baseline_cloud') || cloud;
+    const baselineBranch = urlParams.get('baseline_branch') || branch;
+    const baselineDate = urlParams.get('baseline_date') || '';
+    
+    tests.forEach(test => {
+        const item = document.createElement('div');
+        item.className = 'test-item';
+        
+        const link = document.createElement('a');
+        // Create link with current parameters preserved
+        const linkParams = new URLSearchParams();
+        linkParams.set('benchmark', test);
+        linkParams.set('cloud', cloud);
+        linkParams.set('branch', branch);
+        linkParams.set('days', days);
+        if (baselineCloud) linkParams.set('baseline_cloud', baselineCloud);
+        if (baselineBranch) linkParams.set('baseline_branch', baselineBranch);
+        if (baselineDate) linkParams.set('baseline_date', baselineDate);
+        
+        link.href = `?${linkParams.toString()}`;
+        link.textContent = test;
+        link.title = test; // Show full name on hover
+        
+        item.appendChild(link);
+        testList.appendChild(item);
+    });
+    
+    // Setup search functionality
+    const searchInput = document.getElementById('sidebar-search-input');
+    searchInput.addEventListener('input', () => {
+        const searchTerm = searchInput.value.toLowerCase();
+        
+        // Filter test items
+        const items = testList.querySelectorAll('.test-item');
+        items.forEach(item => {
+            const testName = item.querySelector('a').textContent.toLowerCase();
+            if (testName.includes(searchTerm)) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    });
+}
+
+// Toggle sidebar visibility
+document.getElementById('sidebar-toggle').addEventListener('click', function() {
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    const toggle = document.getElementById('sidebar-toggle');
+    
+    sidebar.classList.toggle('collapsed');
+    mainContent.classList.toggle('expanded');
+    
+    if (sidebar.classList.contains('collapsed')) {
+        toggle.innerHTML = '&gt;';
+    } else {
+        toggle.innerHTML = '&lt;';
+    }
+});
+
+// Load tests for sidebar when page loads
+document.addEventListener('DOMContentLoaded', fetchTestsForSidebar);
+
+// Helper to construct Grafana params from URL params
+function getGrafanaParams(urlParams) {
+	return [
+		`var-branch=${encodeURIComponent(urlParams.get('branch') || 'master')}`,
+		`var-cloud=${encodeURIComponent(urlParams.get('cloud') || 'gce')}`,
+		`var-goos=${encodeURIComponent(urlParams.get('goos') || 'linux')}`,
+		`var-goarch=${encodeURIComponent(urlParams.get('goarch') || 'amd64')}`
+	].join('&');
+}
 </script>
 
 </body>

@@ -26,7 +26,7 @@ spec:
           "/perf",
           "-listen-https-selfsigned=:443",
           "-perfdata=https://perfdata.golang.org",
-          "-influx-host=https://influx.golang.org",
+          "-victoriametrics-url=https://victoriametrics.golang.org",
           "-auth-cron-email=perf-prod@symbolic-datum-552.iam.gserviceaccount.com",
         ]
         readinessProbe:

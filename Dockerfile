@@ -2,26 +2,19 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-FROM golang:1.21-bookworm AS builder
-
-COPY go.mod /app/go.mod
-COPY go.sum /app/go.sum
+FROM --platform=linux/amd64 golang:1.21-alpine AS builder
 
 WORKDIR /app
+COPY . .
 
-RUN go mod download
+ENV GOARCH=amd64
+ENV GOOS=linux
+RUN go build -o perf-server ./perf/
 
-COPY . /app
-RUN go build -o perf golang.org/x/build/perf
+FROM --platform=linux/amd64 alpine:3.19
 
-FROM debian:bookworm
+WORKDIR /app
+COPY --from=builder /app/perf-server .
 
-# netbase and ca-certificates are needed for dialing TLS.
-RUN apt-get update && apt-get install -y \
-	--no-install-recommends \
-	netbase \
-	ca-certificates \
-	&& rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /app/perf /
-ENTRYPOINT ["/perf"]
+EXPOSE 8080
+ENTRYPOINT ["./perf-server"]

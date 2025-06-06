@@ -1,0 +1,45 @@
+# Global annotations that apply to all benchmarks
+global:
+  - date: "2024-02-09"
+    description: "roachtest: harmonize GCE, AWS, Azure machine types"
+    prs: [117852]
+  - date: "2024-10-16"
+    description: "default sysbench to --rand-type=uniform"
+    prs: [132664]
+  - date: "2024-10-31"
+    description: "pebble: enable columnar blocks"
+    prs: [132935]
+  - date: "2024-12-10"
+    description: "rpc: reuse gRPC streams across unary BatchRequest RPCs"
+    prs: [136648]
+  - date: "2025-01-13"
+    description: "prepare sysbench through haproxy"
+    prs: [138921]
+  - date: "2025-01-29"
+    description: "roachtest: enable DRPC in sysbench-settings"
+    prs: [139564]
+  - date: "2025-03-04"
+    description: "added warm-up phase to sysbench"
+    prs: [141770]
+  - date: "2025-03-13"
+    description: "roachtest: now using pgo"
+    prs: [142697]
+  - date: "2025-03-27"
+    description: "roachtest: use buffered writes for sysbench-settings"
+    prs: [143551]
+  - date: "2025-04-09"
+    description: "roachtest: update profile used for PGO"
+    prs: [144182]
+
+# Test-specific annotations
+
+# This is an example of how to annotate a test.
+# The name is a regex pattern that matches the test name.
+# The date is the date of the change.
+# The description is the description of the change.
+# The prs are the PR numbers that caused the change.
+# tests:
+#   "kv":  # Test name
+#     - date: "2024-12-05"
+#       description: "Query planner changes"
+#       prs: [123459, 123460]

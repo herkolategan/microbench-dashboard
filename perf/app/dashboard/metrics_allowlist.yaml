@@ -1,0 +1,13 @@
+# Metrics allowlist for dashboard display
+# By default, all metrics are allowed for all tests unless specified.
+# To restrict metrics for a test, list the allowed metric suffixes or full names under the test name.
+# Example:
+#   test_name:
+#     - metric_suffix_or_full_name
+
+# Default allowlist: allow all metrics for all tests
+"*":
+  - "*"
+
+tpccbench:
+  - "max_warehouse"  # Only allow metrics with this suffix for tpccbench 
