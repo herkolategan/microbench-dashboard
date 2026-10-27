@@ -11,11 +11,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/exp/maps"
 	"log"
+	"maps"
 	"math"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -652,7 +653,7 @@ func commitsFromBenchmarks(benchmarks []*BenchmarkJSON) []Commit {
 			commitsMap[v.CommitHash] = Commit{Hash: v.CommitHash, Date: v.CommitDate}
 		}
 	}
-	commits := maps.Values(commitsMap)
+	commits := slices.Collect(maps.Values(commitsMap))
 	sort.Slice(commits, func(i, j int) bool {
 		return commits[i].Date.Before(commits[j].Date)
 	})
